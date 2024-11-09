@@ -1,102 +1,118 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
+// Utility function to format Unix timestamp to Bangkok time
+const formatDate = (unixTimestamp) => {
+  const date = new Date(unixTimestamp * 1000);
+  return date.toLocaleString("en-US", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
+
+// Separate function to fetch weather data from API
+const fetchWeatherData = async (
+  lat,
+  lon,
+  API_KEY,
+  setWeatherData,
+  setError
+) => {
+  try {
+    setError("");
+    const response = await axios.get(
+      "https://api.openweathermap.org/data/2.5/weather",
+      {
+        params: { lat, lon, appid: API_KEY, units: "metric" },
+      }
+    );
+    setWeatherData(response.data);
+  } catch {
+    setError("Unable to fetch weather data for your location.");
+  }
+};
+
 const Weather = () => {
-  const [city, setCity] = useState("");
+  const [loading, setLoading] = useState(true);
   const [weatherData, setWeatherData] = useState(null);
   const [error, setError] = useState("");
   const [coordinates, setCoordinates] = useState({ lat: null, lon: null });
+  const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
 
-  const API_KEY = import.meta.env.VITE_WEATHER_API_KEY; // Use the environment variable
-
-  // Fetch weather data based on latitude and longitude
-  const fetchWeatherByCoordinates = async (lat, lon) => {
-    try {
-      setError("");
-      const response = await axios.get(
-        `https://api.openweathermap.org/data/2.5/weather`,
-        {
-          params: {
-            lat,
-            lon,
-            appid: API_KEY,
-            units: "metric",
-          },
-        }
-      );
-      setWeatherData(response.data);
-    } catch (err) {
-      setError("Unable to fetch weather data for your location.");
-    }
-  };
-
-  // Fetch weather data based on city name
-  const fetchWeatherByCity = async () => {
-    try {
-      setError("");
-      const response = await axios.get(
-        `https://api.openweathermap.org/data/2.5/weather`,
-        {
-          params: {
-            q: city,
-            appid: API_KEY,
-            units: "metric",
-          },
-        }
-      );
-      setWeatherData(response.data);
-    } catch (err) {
-      setError("City not found. Please enter a valid city name.");
-      setWeatherData(null);
-    }
-  };
-
-  const handleInputChange = (e) => {
-    setCity(e.target.value);
-  };
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    fetchWeather();
-  };
-
-  // Get user’s current location on component mount
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
         setCoordinates({ lat: latitude, lon: longitude });
-        fetchWeatherByCoordinates(latitude, longitude);
+        fetchWeatherData(
+          latitude,
+          longitude,
+          API_KEY,
+          setWeatherData,
+          setError
+        );
+        setLoading(false);
       },
-      (error) => {
+      () => {
         setError("Geolocation not supported or permission denied.");
+        setLoading(false);
       }
     );
   }, []);
 
   return (
-    <div>
-      <h1>Weather App</h1>
-      <form onSubmit={handleSearch}>
-        <input
-          type="text"
-          value={city}
-          onChange={handleInputChange}
-          placeholder="Enter city name"
-        />
-        <button type="submit">Get Weather</button>
-      </form>
+    <>
+      {loading && (
+        <div className="w-screen h-svh grid place-items-center">Loading...</div>
+      )}
       {error && <p className="error">{error}</p>}
       {weatherData && (
-        <div className="weather-info">
-          <h2>{weatherData.name}</h2>
-          <p>Temperature: {weatherData.main.temp}°C</p>
-          <p>Condition: {weatherData.weather[0].description}</p>
-          <p>Humidity: {weatherData.main.humidity}%</p>
-          <p>Wind Speed: {weatherData.wind.speed} m/s</p>
-        </div>
+        <main
+          className={`w-screen h-svh px-4 py-8 text-center flex flex-col ${
+            weatherData.dt > weatherData.sys.sunrise
+              ? "bg-slate-50 text-black"
+              : "bg-slate-900 text-white"
+          }`}
+        >
+          <>
+            <div className="flex flex-col justify-evenly h-full">
+              <div className="flex flex-col">
+                <h1 className="font-bold text-2xl mb-2">{weatherData.name}</h1>
+                <p>{formatDate(weatherData.dt)}</p>
+              </div>
+              <div className="grid place-items-center">
+                <img
+                  className="block animate-cloud"
+                  src={`https://openweathermap.org/img/wn/${weatherData.weather[0].icon}@4x.png`}
+                  alt=""
+                  loading="lazy"
+                />
+              </div>
+              <div>
+                <h2 className="font-bold text-6xl mb-4">
+                  {weatherData.main.temp}°<small>C</small>
+                </h2>
+                <p>{weatherData.weather[0].main}</p>
+                <p>{weatherData.weather[0].description}</p>
+              </div>
+            </div>
+            <ul className="flex gap-4">
+              <li className="flex-1 flex flex-col">
+                Humidity: {weatherData.main.humidity}%
+              </li>
+              <li className="flex-1 flex flex-col">
+                Wind Speed: {weatherData.wind.speed} m/s
+              </li>
+            </ul>
+          </>
+        </main>
       )}
-    </div>
+    </>
   );
 };
 
